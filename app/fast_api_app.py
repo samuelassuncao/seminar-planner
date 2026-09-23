@@ -1,27 +1,15 @@
-# Copyright 2026 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import contextlib
 import os
 import uuid
 import json
 
 from fastapi import HTTPException
+from fastapi.responses import Response
 from google.genai import types
 
 from app.models import FinalSeminarPlan, SeminarRequest
 from app.prompts import build_seminar_prompt
+from app.pptx_generator import generate_pptx
 from collections.abc import AsyncIterator
 
 from a2a.server.tasks import InMemoryTaskStore
@@ -34,9 +22,11 @@ from app.app_utils import services
 from app.app_utils.a2a import attach_a2a_routes
 
 load_dotenv()
+
 allow_origins = [
     "http://localhost:5173",
 ]
+
 otel_to_cloud = False
 
 AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,9 +45,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         artifact_service=services.get_artifact_service(),
         auto_create_session=True,
     )
+
     app.state.runner = runner
     app.state.session_service = session_service
     app.state.agent_app_name = adk_app.name
+
     await attach_a2a_routes(
         app,
         agent=root_agent,
@@ -65,6 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         task_store=InMemoryTaskStore(),
         rpc_path=f"/a2a/{adk_app.name}",
     )
+
     yield
 
 
@@ -80,6 +73,7 @@ app: FastAPI = get_fast_api_app(
 
 app.title = "seminar-planner"
 app.description = "API for interacting with the Agent seminar-planner"
+
 
 @app.post("/api/seminars", response_model=FinalSeminarPlan)
 async def create_seminar(request: SeminarRequest):
@@ -134,7 +128,24 @@ async def create_seminar(request: SeminarRequest):
     return response_json
 
 
-# Main execution
+@app.post("/api/seminars/pptx")
+async def export_seminar_pptx(plan: FinalSeminarPlan):
+    pptx_file = generate_pptx(plan)
+
+    return Response(
+        content=pptx_file.getvalue(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "presentationml.presentation"
+        ),
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="seminar-plan.pptx"'
+            )
+        },
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
 
