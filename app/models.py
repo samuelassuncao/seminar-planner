@@ -23,6 +23,21 @@ class Slide(BaseModel):
     estimated_minutes: float
 
 
+class SlideSection(BaseModel):
+    title: str
+    text: str | None = None
+    subtopics: list[str] = []
+
+
+class DetailedSlide(BaseModel):
+    number: int
+    source_slide_number: int
+    title: str
+    sections: list[SlideSection]
+    participant: str
+    estimated_minutes: float
+
+
 class SeminarRequest(BaseModel):
     title: str
     participants: int
@@ -90,3 +105,13 @@ class SeminarPlan(BaseModel):
                 )
 
         return self
+
+
+class FinalSeminarPlan(BaseModel):
+    title: str
+    topics: list[Topic]
+    participants: list[Participant]
+    slides: list[DetailedSlide]
+    total_duration_minutes: float
+    references: list[str]
+    mandatory_topics: list[str]

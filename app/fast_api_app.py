@@ -20,7 +20,7 @@ import json
 from fastapi import HTTPException
 from google.genai import types
 
-from app.models import SeminarPlan, SeminarRequest
+from app.models import FinalSeminarPlan, SeminarRequest
 from app.prompts import build_seminar_prompt
 from collections.abc import AsyncIterator
 
@@ -81,7 +81,7 @@ app: FastAPI = get_fast_api_app(
 app.title = "seminar-planner"
 app.description = "API for interacting with the Agent seminar-planner"
 
-@app.post("/api/seminars", response_model=SeminarPlan)
+@app.post("/api/seminars", response_model=FinalSeminarPlan)
 async def create_seminar(request: SeminarRequest):
     runner = app.state.runner
     session_service = app.state.session_service
