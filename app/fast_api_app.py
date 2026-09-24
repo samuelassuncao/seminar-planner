@@ -23,8 +23,10 @@ from app.app_utils.a2a import attach_a2a_routes
 
 load_dotenv()
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 allow_origins = [
-    "http://localhost:5173",
+    FRONTEND_URL,
 ]
 
 otel_to_cloud = False
