@@ -1,31 +1,33 @@
+import asyncio
 import contextlib
+import json
 import os
 import uuid
-import json
-
-from fastapi import HTTPException
-from fastapi.responses import Response
-from google.genai import types
-
-from app.models import FinalSeminarPlan, SeminarRequest
-from app.prompts import build_seminar_prompt
-from app.pptx_generator import generate_pptx
 from collections.abc import AsyncIterator
 
 from a2a.server.tasks import InMemoryTaskStore
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.runners import Runner
+from google.genai import types
+from google.genai.errors import ServerError
 
 from app.app_utils import services
 from app.app_utils.a2a import attach_a2a_routes
+from app.models import FinalSeminarPlan, SeminarRequest
+from app.prompts import build_seminar_prompt
+from app.pptx_generator import generate_pptx
 
-from google.genai.errors import ServerError
 
 load_dotenv()
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+FRONTEND_URL = os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173",
+)
 
 allow_origins = [
     FRONTEND_URL,
@@ -33,7 +35,9 @@ allow_origins = [
 
 otel_to_cloud = False
 
-AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AGENT_DIR = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
 
 
 @contextlib.asynccontextmanager
@@ -45,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     runner = Runner(
         app=adk_app,
-        session_service=services.get_session_service(),
+        session_service=session_service,
         artifact_service=services.get_artifact_service(),
         auto_create_session=True,
     )
@@ -99,27 +103,42 @@ async def create_seminar(request: SeminarRequest):
     message = types.Content(
         role="user",
         parts=[
-            types.Part(text=prompt)
+            types.Part(text=prompt),
         ],
     )
 
     final_response = None
 
     try:
-        async for event in runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=message,
-        ):
-            if event.is_final_response():
-                final_response = event.content
+        async with asyncio.timeout(60):
+            async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=message,
+            ):
+                if event.is_final_response():
+                    final_response = event.content
 
     except ServerError as e:
         print("ERRO DO GEMINI:", repr(e))
 
         raise HTTPException(
             status_code=503,
-            detail="O serviço de IA está temporariamente indisponível. Tente novamente em alguns instantes.",
+            detail=(
+                "O serviço de IA está temporariamente indisponível. "
+                "Tente novamente em alguns instantes."
+            ),
+        ) from e
+
+    except TimeoutError as e:
+        print("TIMEOUT AO GERAR PLANEJAMENTO")
+
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "A geração do planejamento demorou mais do que o esperado. "
+                "Tente novamente."
+            ),
         ) from e
 
     except Exception as e:
@@ -139,12 +158,14 @@ async def create_seminar(request: SeminarRequest):
     try:
         response_text = final_response.parts[0].text
         response_json = json.loads(response_text)
+
     except Exception as e:
         print("ERRO AO PROCESSAR RESPOSTA:", repr(e))
+
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao processar resposta: {e}",
-        )
+            detail="Erro ao processar a resposta do agente.",
+        ) from e
 
     return response_json
 
@@ -170,4 +191,8 @@ async def export_seminar_pptx(plan: FinalSeminarPlan):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+    )
