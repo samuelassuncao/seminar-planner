@@ -21,6 +21,8 @@ from google.adk.runners import Runner
 from app.app_utils import services
 from app.app_utils.a2a import attach_a2a_routes
 
+from google.genai.errors import ServerError
+
 load_dotenv()
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -103,13 +105,30 @@ async def create_seminar(request: SeminarRequest):
 
     final_response = None
 
-    async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=message,
-    ):
-        if event.is_final_response():
-            final_response = event.content
+    try:
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=message,
+        ):
+            if event.is_final_response():
+                final_response = event.content
+
+    except ServerError as e:
+        print("ERRO DO GEMINI:", repr(e))
+
+        raise HTTPException(
+            status_code=503,
+            detail="O serviço de IA está temporariamente indisponível. Tente novamente em alguns instantes.",
+        ) from e
+
+    except Exception as e:
+        print("ERRO AO EXECUTAR O AGENTE:", repr(e))
+
+        raise HTTPException(
+            status_code=500,
+            detail="Ocorreu um erro ao gerar o planejamento.",
+        ) from e
 
     if final_response is None:
         raise HTTPException(
