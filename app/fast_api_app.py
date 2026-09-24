@@ -296,6 +296,39 @@ async def test_gemini_stream():
             detail=f"{type(e).__name__}: {e}",
         ) from e
 
+@app.get("/api/test-gemini-chat-stream")
+async def test_gemini_chat_stream():
+    from google import genai
+
+    try:
+        client = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY"],
+        )
+
+        chat = client.chats.create(
+            model="gemini-3.5-flash",
+        )
+
+        response_text = ""
+
+        for chunk in chat.send_message_stream(
+            message="Responda apenas: OK",
+        ):
+            if chunk.text:
+                response_text += chunk.text
+
+        return {
+            "response": response_text,
+        }
+
+    except Exception as e:
+        print("ERRO GEMINI CHAT STREAM:", repr(e))
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+
 
 @app.post("/api/seminars/pptx")
 async def export_seminar_pptx(plan: FinalSeminarPlan):
