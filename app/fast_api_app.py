@@ -22,6 +22,8 @@ from app.models import FinalSeminarPlan, SeminarRequest
 from app.prompts import build_seminar_prompt
 from app.pptx_generator import generate_pptx
 
+from app.models import SeminarPlan
+
 import sys
 from importlib.metadata import version
 
@@ -49,7 +51,8 @@ AGENT_DIR = os.path.dirname(
 test_agent = Agent(
     name="test_agent",
     model="gemini-3.6-flash",
-    instruction="Responda apenas: OK",
+    instruction="Responda com um planejamento de seminário simples.",
+    output_schema=SeminarPlan,
 )
 
 test_app = App(
