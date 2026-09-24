@@ -22,6 +22,9 @@ from app.models import FinalSeminarPlan, SeminarRequest
 from app.prompts import build_seminar_prompt
 from app.pptx_generator import generate_pptx
 
+import sys
+from importlib.metadata import version
+
 
 load_dotenv()
 
@@ -251,6 +254,16 @@ async def test_adk():
     return {
         "response": None,
         "message": "Nenhuma resposta final foi recebida.",
+    }
+
+@app.get("/api/test-versions")
+async def test_versions():
+    return {
+        "python": sys.version,
+        "google-adk": version("google-adk"),
+        "google-genai": version("google-genai"),
+        "pydantic": version("pydantic"),
+        "a2a-sdk": version("a2a-sdk"),
     }
 
 
