@@ -9,6 +9,8 @@ from a2a.server.tasks import InMemoryTaskStore
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
+from google.adk.agents import Agent
+from google.adk.apps import App
 from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.runners import Runner
 from google.genai import types
@@ -19,8 +21,6 @@ from app.app_utils.a2a import attach_a2a_routes
 from app.models import FinalSeminarPlan, SeminarRequest
 from app.prompts import build_seminar_prompt
 from app.pptx_generator import generate_pptx
-
-from google import genai
 
 
 load_dotenv()
@@ -42,6 +42,19 @@ AGENT_DIR = os.path.dirname(
 )
 
 
+# Agente temporário para diagnóstico do ADK
+test_agent = Agent(
+    name="test_agent",
+    model="gemini-3.5-flash",
+    instruction="Responda apenas: OK",
+)
+
+test_app = App(
+    root_agent=test_agent,
+    name="test_app",
+)
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.agent import app as adk_app
@@ -49,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     session_service = services.get_session_service()
 
+    # Runner principal
     runner = Runner(
         app=adk_app,
         session_service=session_service,
@@ -59,6 +73,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.runner = runner
     app.state.session_service = session_service
     app.state.agent_app_name = adk_app.name
+
+    # Runner temporário para teste do ADK
+    test_runner = Runner(
+        app=test_app,
+        session_service=session_service,
+        artifact_service=services.get_artifact_service(),
+        auto_create_session=True,
+    )
+
+    app.state.test_runner = test_runner
+    app.state.test_app_name = test_app.name
 
     await attach_a2a_routes(
         app,
@@ -172,6 +197,53 @@ async def create_seminar(request: SeminarRequest):
     return response_json
 
 
+@app.get("/api/test-adk")
+async def test_adk():
+    runner = app.state.test_runner
+    session_service = app.state.session_service
+    app_name = app.state.test_app_name
+
+    user_id = str(uuid.uuid4())
+    session_id = str(uuid.uuid4())
+
+    await session_service.create_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+    message = types.Content(
+        role="user",
+        parts=[
+            types.Part(text="Responda apenas: OK"),
+        ],
+    )
+
+    try:
+        async with asyncio.timeout(60):
+            async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=message,
+            ):
+                if event.is_final_response():
+                    return {
+                        "response": event.content.parts[0].text,
+                    }
+
+    except Exception as e:
+        print("ERRO TESTE ADK:", repr(e))
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+
+    return {
+        "response": "Nenhuma resposta final",
+    }
+
+
 @app.post("/api/seminars/pptx")
 async def export_seminar_pptx(plan: FinalSeminarPlan):
     pptx_file = generate_pptx(plan)
@@ -188,20 +260,6 @@ async def export_seminar_pptx(plan: FinalSeminarPlan):
             )
         },
     )
-
-# Testando IA em produção
-@app.get("/api/test-gemini")
-async def test_gemini():
-    client = genai.Client(
-        api_key=os.environ["GEMINI_API_KEY"]
-    )
-
-    response = client.models.generate_content(
-        model="gemini-3.5-flash",
-        contents="Responda apenas: OK",
-    )
-
-    return {"response": response.text}
 
 
 if __name__ == "__main__":
