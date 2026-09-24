@@ -226,7 +226,16 @@ async def test_adk():
                 session_id=session_id,
                 new_message=message,
             ):
+                print("EVENTO ADK:", repr(event))
+
                 if event.is_final_response():
+                    if event.content is None:
+                        return {
+                            "response": None,
+                            "message": "O ADK marcou o evento como final, mas não retornou conteúdo.",
+                            "event": repr(event),
+                        }
+
                     return {
                         "response": event.content.parts[0].text,
                     }
@@ -240,7 +249,8 @@ async def test_adk():
         ) from e
 
     return {
-        "response": "Nenhuma resposta final",
+        "response": None,
+        "message": "Nenhuma resposta final foi recebida.",
     }
 
 
