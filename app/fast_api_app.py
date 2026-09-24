@@ -266,6 +266,36 @@ async def test_versions():
         "a2a-sdk": version("a2a-sdk"),
     }
 
+@app.get("/api/test-gemini-stream")
+async def test_gemini_stream():
+    from google import genai
+
+    try:
+        client = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY"],
+        )
+
+        response_text = ""
+
+        for chunk in client.models.generate_content_stream(
+            model="gemini-3.5-flash",
+            contents="Responda apenas: OK",
+        ):
+            if chunk.text:
+                response_text += chunk.text
+
+        return {
+            "response": response_text,
+        }
+
+    except Exception as e:
+        print("ERRO GEMINI STREAM:", repr(e))
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+
 
 @app.post("/api/seminars/pptx")
 async def export_seminar_pptx(plan: FinalSeminarPlan):
