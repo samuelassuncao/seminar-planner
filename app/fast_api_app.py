@@ -20,6 +20,8 @@ from app.models import FinalSeminarPlan, SeminarRequest
 from app.prompts import build_seminar_prompt
 from app.pptx_generator import generate_pptx
 
+from google import genai
+
 
 load_dotenv()
 
@@ -186,6 +188,20 @@ async def export_seminar_pptx(plan: FinalSeminarPlan):
             )
         },
     )
+
+# Testando IA em produção
+@app.get("/api/test-gemini")
+async def test_gemini():
+    client = genai.Client(
+        api_key=os.environ["GEMINI_API_KEY"]
+    )
+
+    response = client.models.generate_content(
+        model="gemini-3.5-flash",
+        contents="Responda apenas: OK",
+    )
+
+    return {"response": response.text}
 
 
 if __name__ == "__main__":
