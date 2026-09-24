@@ -110,7 +110,7 @@ async def create_seminar(request: SeminarRequest):
     final_response = None
 
     try:
-        async with asyncio.timeout(60):
+        async with asyncio.timeout(180):
             async for event in runner.run_async(
                 user_id=user_id,
                 session_id=session_id,
