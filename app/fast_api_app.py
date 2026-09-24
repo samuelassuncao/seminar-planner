@@ -48,7 +48,7 @@ AGENT_DIR = os.path.dirname(
 # Agente temporário para diagnóstico do ADK
 test_agent = Agent(
     name="test_agent",
-    model="gemini-3.5-flash",
+    model="gemini-3.6-flash",
     instruction="Responda apenas: OK",
 )
 
@@ -202,59 +202,72 @@ async def create_seminar(request: SeminarRequest):
 
 @app.get("/api/test-adk")
 async def test_adk():
-    runner = app.state.test_runner
-    session_service = app.state.session_service
-    app_name = app.state.test_app_name
-
-    user_id = str(uuid.uuid4())
-    session_id = str(uuid.uuid4())
-
-    await session_service.create_session(
-        app_name=app_name,
-        user_id=user_id,
-        session_id=session_id,
-    )
-
-    message = types.Content(
-        role="user",
-        parts=[
-            types.Part(text="Responda apenas: OK"),
-        ],
-    )
+    from google.adk.agents import Agent
+    from google.adk.apps import App
+    from google.adk.runners import Runner
+    from google.genai import types
 
     try:
-        async with asyncio.timeout(60):
-            async for event in runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=message,
-            ):
-                print("EVENTO ADK:", repr(event))
+        test_agent = Agent(
+            name="test_agent",
+            model="gemini-3.6-flash",
+            instruction="Responda apenas: OK",
+        )
 
-                if event.is_final_response():
-                    if event.content is None:
-                        return {
-                            "response": None,
-                            "message": "O ADK marcou o evento como final, mas não retornou conteúdo.",
-                            "event": repr(event),
-                        }
+        test_app = App(
+            root_agent=test_agent,
+            name="test_app",
+        )
 
-                    return {
-                        "response": event.content.parts[0].text,
-                    }
+        runner = Runner(
+            app=test_app,
+            session_service=app.state.session_service,
+            artifact_service=services.get_artifact_service(),
+            auto_create_session=True,
+        )
+
+        user_id = str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
+
+        await app.state.session_service.create_session(
+            app_name="test_app",
+            user_id=user_id,
+            session_id=session_id,
+        )
+
+        message = types.Content(
+            role="user",
+            parts=[types.Part(text="Responda apenas: OK")],
+        )
+
+        events = []
+
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=message,
+        ):
+            events.append({
+                "is_final": event.is_final_response(),
+                "content": (
+                    event.content.model_dump(mode="json")
+                    if event.content
+                    else None
+                ),
+                "error_code": event.error_code,
+                "error_message": event.error_message,
+            })
+
+        return {
+            "events": events,
+        }
 
     except Exception as e:
         print("ERRO TESTE ADK:", repr(e))
-
         raise HTTPException(
             status_code=500,
             detail=f"{type(e).__name__}: {e}",
         ) from e
-
-    return {
-        "response": None,
-        "message": "Nenhuma resposta final foi recebida.",
-    }
 
 @app.get("/api/test-versions")
 async def test_versions():
@@ -278,7 +291,7 @@ async def test_gemini_stream():
         response_text = ""
 
         for chunk in client.models.generate_content_stream(
-            model="gemini-3.5-flash",
+            model="gemini-3.6-flash",
             contents="Responda apenas: OK",
         ):
             if chunk.text:
@@ -306,7 +319,7 @@ async def test_gemini_chat_stream():
         )
 
         chat = client.chats.create(
-            model="gemini-3.5-flash",
+            model="gemini-3.6-flash",
         )
 
         response_text = ""

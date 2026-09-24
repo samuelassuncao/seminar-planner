@@ -6,7 +6,7 @@ from app.prompts import SLIDE_CONTENT_INSTRUCTION
 
 slide_content_agent = Agent(
     name="slide_content",
-    model="gemini-3.5-flash",
+    model="gemini-3.6-flash",
     description=(
         "Agente especializado em desenvolver e refinar "
         "o conteúdo dos slides de seminários."
