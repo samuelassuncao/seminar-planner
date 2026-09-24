@@ -8,7 +8,7 @@ from app.prompts import SEMINAR_PLANNER_INSTRUCTION
 
 seminar_planner_agent = Agent(
     name="seminar_planner",
-    model="gemini-3.5-flash-lite",
+    model="gemini-3.5-flash",
     description=(
         "Agente especializado em planejamento "
         "de seminários acadêmicos."
