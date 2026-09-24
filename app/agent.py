@@ -23,7 +23,6 @@ seminar_pipeline = SequentialAgent(
     name="seminar_pipeline",
     sub_agents=[
         seminar_planner_agent,
-        slide_content_agent,
     ],
 )
 
